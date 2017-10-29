@@ -95,7 +95,8 @@ Servo ArmElbow;
 
 unsigned long previousMillis = 0;
 
-bool Servosattached = false;
+bool HeadServosAttached = false;
+bool ArmServosAttached = false;
 
 
 int HeadYawms = 1500;
@@ -149,7 +150,7 @@ void setup() {
     tft.begin();
     tft.setRotation(1);
     tft.fillScreen(ILI9340_BLACK);
-    DrawFace(0,0);
+    DrawFace(1,0);
 
   
 }
@@ -215,9 +216,11 @@ void loop() {
         
 
         
-        if(Servosattached){
-        HeadPID(ScaledRollValue ,ScaledPitchValue ,ScaledYawValue);
-        ArmPID(ScaledArmRotateValue, ScaledArmLoweBvalue, ScaledArmElbowValue);
+        if(HeadServosAttached){
+            HeadPID(ScaledRollValue ,ScaledPitchValue ,ScaledYawValue);
+        }
+        if(ArmServosAttached){        
+            ArmPID(ScaledArmRotateValue, ScaledArmLoweBvalue, ScaledArmElbowValue);
         }
       }    
         
@@ -497,11 +500,17 @@ void interpretcommand()
    Svalue = findchar('S');
    switch(Svalue){
    case(0):{
-       detachservos();
+       attachheadservos();
        break;}  
    case(1):{
-       attachservos();
+       attacharmservos();
        break;} 
+   case(2):{
+       detachheadservos();
+       break;}
+   case(3):{
+       detacharmservos();
+       break;}
       
      }    
     
@@ -541,30 +550,45 @@ int findchar(char a)
 
 
 
-void attachservos()
+void attachheadservos()
 {
     HeadRoll.attach(6);
     HeadPitch.attach(5);
     HeadYaw.attach(4);
 
+    DrawFace(0,0);
+
+    HeadServosAttached = true;
+}
+
+void attacharmservos()
+{
+
     ArmRotate.attach(7);
     ArmLower.attach(8);
     ArmElbow.attach(9);
 
-    Servosattached = true;
+    ArmServosAttached = true;
 }
   
-void detachservos()
+void detachheadservos()
 {
     HeadRoll.detach();
     HeadPitch.detach();
     HeadYaw.detach();
 
+    DrawFace(1,0);
+
+    HeadServosAttached = false;
+}
+
+void detacharmservos()
+{
     ArmRotate.detach();
     ArmLower.detach();
     ArmElbow.detach();
 
-    Servosattached = false;
+    ArmServosAttached = false;
     
 }
 

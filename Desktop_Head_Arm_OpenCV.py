@@ -15,17 +15,12 @@ DisplayImage = False
 print "Starting OpenCV"
 capture = cv2.VideoCapture(0)
 
-capture.set(3,384) #1024 640 1280 800 384
-capture.set(4,288) #600 480 960 600 288
+imagewidth = 640
+imageheight = 480
 
-if DisplayImage is True:
-    cv2.namedWindow("camera", 0)
-    print ("Creating OpenCV windows")
-    cv2.resizeWindow("camera", 320,240) 
-    print ("Resizing OpenCV windows")
-    cv2.moveWindow("camera", 800,30)
-    print ("Moving OpenCV window")
-    cv2.waitKey(50)
+capture.set(3,640) #1024 640 1280 800 384
+capture.set(4,480) #600 480 960 600 288
+
 
 
 
@@ -38,12 +33,8 @@ def DisplayFrame():
 
     ret,img = capture.read()
     ret,img = capture.read()
-    ret,img = capture.read()
-    ret,img = capture.read()
     ret,img = capture.read() #get a bunch of frames to make sure current frame is the most recent
 
-    cv2.imshow("camera", img)
-    cv2.waitKey(20)
 
     return img
 
@@ -55,8 +46,6 @@ def DisplayFrame():
 ##################################################################################################
 def ReturnFrameRGB():
 
-    ret,img = capture.read()
-    ret,img = capture.read()
     ret,img = capture.read()
     ret,img = capture.read()
     ret,img = capture.read() #get a bunch of frames to make sure current frame is the most recent
@@ -73,8 +62,6 @@ def ReturnFrameRGB():
 ##################################################################################################
 def SaveFrame(filename):
 
-    ret,img = capture.read()
-    ret,img = capture.read()
     ret,img = capture.read()
     ret,img = capture.read()
     ret,img = capture.read() #get a bunch of frames to make sure current frame is the most recent
@@ -95,9 +82,7 @@ def FindBall(ThresholdArray):
     BallData = -1
     ret,img = capture.read() #get a bunch of frames to make sure current frame is the most recent
     ret,img = capture.read() 
-    ret,img = capture.read()
-    ret,img = capture.read()
-    ret,img = capture.read() #5 seems to be enough
+    ret,img = capture.read() #3 seems to be enough
 
     imgHSV = cv2.cvtColor(img,cv2.COLOR_BGR2HSV) #convert img to HSV and store result in imgHSVyellow
     lower = np.array([ThresholdArray[0],ThresholdArray[1],ThresholdArray[2]]) #np arrays for upper and lower thresholds
@@ -114,7 +99,7 @@ def FindBall(ThresholdArray):
             rect = cv2.minAreaRect(contours[x])
             box = cv2.boxPoints(rect)
             box = np.int0(box)
-            cv2.drawContours(img,[box],0,(0,160,255),1)
+            cv2.drawContours(img,[box],0,(0,160,255),2)
  
             boxcentre = rect[0] #get centre coordinates of each object
             boxcentrex = int(boxcentre[0])
@@ -127,6 +112,39 @@ def FindBall(ThresholdArray):
     imgthreshed = cv2.cvtColor(imgthreshed, cv2.COLOR_GRAY2RGB)
  
     return BallData, img, imgthreshed
+
+
+
+##################################################################################################
+#
+# Find Faces - 
+#
+##################################################################################################
+def FindFaces():
+
+    ret,img = capture.read() #get a bunch of frames to make sure current frame is the most recent
+    ret,img = capture.read() 
+    ret,img = capture.read() #3 seems to be enough
+    face_cascade = cv2.CascadeClassifier('//home//peter//opencv-3.2.0//data//haarcascades//haarcascade_frontalface_default.xml')
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+    facecoords = []
+    facecoords.append([imagewidth,imageheight])
+
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) #Convert to BGR before drawing to img, ready for returning to main script for display
+
+    for (x,y,w,h) in faces:
+        facecoords.append([(x+w/2),(y+h/2)])
+        cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
+       
+
+
+    return facecoords, img
+
+
 
 
 def destroy():
