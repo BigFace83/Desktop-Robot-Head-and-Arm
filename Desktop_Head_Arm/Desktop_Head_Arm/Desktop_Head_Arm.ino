@@ -51,6 +51,7 @@ const int ArmElbowInPin = A2;
 const int HandSwitchPin = 30;     //Hand switch input pin
 
 int HandSwitchState = 1;
+int SonarReading = 0;
 
 
 int RawRollValue = 0;        // value read from the pot
@@ -58,7 +59,7 @@ int RawPitchValue = 0;        // value read from the pot
 int RawYawValue = 0;        // value read from the pot
 
 int RawArmRotateValue = 0;
-int RawArmLoweBvalue = 0;
+int RawArmLowervalue = 0;
 int RawArmElbowValue = 0;
 
 
@@ -67,11 +68,11 @@ int RawArmElbowValue = 0;
 PID gains for servo movements
 
 ****************************************************************************/
-#define HeadPGain 1.2
+#define HeadPGain 1.0
 #define HeadDGain 0.8
 
 
-#define ArmPGain 1.2
+#define ArmPGain 1.0
 #define ArmDGain 0.8
 
 
@@ -92,6 +93,7 @@ Servo HeadYaw;
 Servo ArmRotate;
 Servo ArmLower;
 Servo ArmElbow;
+Servo ArmSonar;
 
 unsigned long previousMillis = 0;
 
@@ -106,6 +108,7 @@ int HeadRollms = 1500;
 int ArmRotatems = 1500;
 int ArmLowerms = 2350;
 int ArmElbowms = 2170;
+int ArmSonarms = 1000;
 
 
 
@@ -116,8 +119,9 @@ volatile int PitchSetpoint = 0;
 volatile int YawSetpoint = 0;
 
 volatile int ArmRotateSetpoint = 0;
-volatile int ArmLowerSetpoint = 0;
-volatile int ArmElbowSetpoint = -65;
+volatile int ArmLowerSetpoint = 120;
+volatile int ArmElbowSetpoint = -150;
+volatile int ArmSonarSetpoint = 30;
 
 
 
@@ -139,6 +143,8 @@ void setup() {
     ArmRotate.writeMicroseconds(ArmRotatems);
     ArmLower.writeMicroseconds(ArmLowerms);
     ArmElbow.writeMicroseconds(ArmElbowms);
+    ArmSonar.writeMicroseconds(ArmSonarms);
+    
 
     
     pinMode(HandSwitchPin, INPUT);
@@ -191,7 +197,7 @@ void loop() {
         RawYawValue = analogRead(YawInPin);
 
         RawArmRotateValue = analogRead(ArmRotateInPin);
-        RawArmLoweBvalue = analogRead(ArmLowerInPin);
+        RawArmLowervalue = analogRead(ArmLowerInPin);
         RawArmElbowValue = analogRead(ArmElbowInPin);
   
         // map it to the calibrated range for angles:
@@ -199,28 +205,31 @@ void loop() {
         int ScaledPitchValue = map(RawPitchValue, 460, 180, 70, -65);
         int ScaledYawValue = map(RawYawValue, 515, 105, -90, 90);
 
-        int ScaledArmRotateValue = map(RawArmRotateValue, 522, 82, -60, 60);
-        int ScaledArmLoweBvalue = map(RawArmLoweBvalue, 524, 82, 0, 100);
-        int ScaledArmElbowValue = map(RawArmElbowValue, 460, 85, -70, 125);
+        int ScaledArmRotateValue = map(RawArmRotateValue, 470, 160, -45, 45);
+        int ScaledArmLowervalue = map(RawArmLowervalue, 524, 85, 120, 0);
+        int ScaledArmElbowValue = map(RawArmElbowValue, 505, 109, -150, 20);
+
+        int ScaledSonarValue = map(ArmSonarSetpoint, 90, -85, 500, 2500);
 
         
         /*
         // print the results to the serial monitor:
-        Serial.print("Rot mz = ");
-        Serial.print(ArmRotatems);
-        Serial.print(", Lower ms = ");
-        Serial.println(ArmLowerms);
-        Serial.print(", Elbow ms = ");
-        Serial.println(ArmElbowms);
+        Serial.print("Rot val = ");
+        Serial.print(RawArmRotateValue);
+        Serial.print(", Lower val = ");
+        Serial.println(RawArmLowervalue);
+        Serial.print(", Elbow val = ");
+        Serial.println(RawArmElbowValue);
         */
-        
+
+        SonarReading = readsonar();
 
         
         if(HeadServosAttached){
             HeadPID(ScaledRollValue ,ScaledPitchValue ,ScaledYawValue);
         }
         if(ArmServosAttached){        
-            ArmPID(ScaledArmRotateValue, ScaledArmLoweBvalue, ScaledArmElbowValue);
+            ArmPID(ScaledArmRotateValue, ScaledArmLowervalue, ScaledArmElbowValue, ScaledSonarValue);
         }
       }    
         
@@ -264,7 +273,7 @@ void HeadPID(float Roll,float Pitch,float Yaw){
    
 }
 
-void ArmPID(float Rotate,float Lower, float Elbow){
+void ArmPID(float Rotate,float Lower, float Elbow, int Sonar){
   
     //Serial.println("DO PID");
     
@@ -279,7 +288,7 @@ void ArmPID(float Rotate,float Lower, float Elbow){
     RotateprevError = RotateError;
 
     float LowerError = Lower - ArmLowerSetpoint;
-    ArmLowerms = int(ArmLowerms + (LowerError*ArmPGain) + ((LowerError-LowerprevError)*ArmDGain));
+    ArmLowerms = int(ArmLowerms - (LowerError*ArmPGain) - ((LowerError-LowerprevError)*ArmDGain));
     ArmLower.writeMicroseconds(ArmLowerms);    
     LowerprevError = LowerError;
 
@@ -289,6 +298,7 @@ void ArmPID(float Rotate,float Lower, float Elbow){
     ElbowprevError = ElbowError;
 
 
+     ArmSonar.writeMicroseconds(Sonar); 
    
 }
 
@@ -387,6 +397,7 @@ void interpretcommand()
    int Fvalue; //Face Command
    int Evalue; //Eyes Command
    int Hvalue; //Head command
+   int Gvalue; //Gripper/Sonar servo value
    int Avalue; //Arm command
    int Bvalue; //Base rotate arm value
    int Lvalue; //Lower arm value
@@ -445,23 +456,26 @@ void interpretcommand()
         if (Uvalue != -1){
           ArmElbowSetpoint = Uvalue;
         }
+        Gvalue = findchar('G');
+        if (Gvalue != -1){
+          ArmSonarSetpoint = Gvalue;
+        }
         break;    
      }
    case(1):{
-        Serial.println(map(RawArmRotateValue, 522, 82, -60, 60));
+        Serial.println(map(RawArmRotateValue, 470, 160, -45, 45));
         break;
     }
    case(2):{
-        Serial.println(map(RawArmLoweBvalue, 524, 82, 0, 100));
+        Serial.println(map(RawArmLowervalue, 524, 85, 120, 0));
         break;
     }
    case(3):{
-        Serial.println(map(RawArmElbowValue, 460, 85, -70, 125));
+        Serial.println(map(RawArmElbowValue, 505, 109, -150, 20));
         break;
     }        
    case(4):{
-        HandSwitchState = digitalRead(HandSwitchPin);
-        Serial.println(HandSwitchState);
+        Serial.println(SonarReading);
         break;
     }
    }
@@ -567,6 +581,7 @@ void attacharmservos()
     ArmRotate.attach(7);
     ArmLower.attach(8);
     ArmElbow.attach(9);
+    ArmSonar.attach(10);
 
     ArmServosAttached = true;
 }
@@ -587,8 +602,33 @@ void detacharmservos()
     ArmRotate.detach();
     ArmLower.detach();
     ArmElbow.detach();
+    ArmSonar.detach();
 
     ArmServosAttached = false;
     
 }
 
+
+int readsonar() //Read sonar sensor
+{
+  
+  
+  //read head sonar sensor 
+  pinMode(11, OUTPUT);
+  digitalWrite(11, LOW);             // Make sure pin is low before sending a short high to trigger ranging
+  delayMicroseconds(2);
+  digitalWrite(11, HIGH);            // Send a short 10 microsecond high burst on pin to start ranging
+  delayMicroseconds(10);
+  digitalWrite(11, LOW);             // Send pin low again before waiting for pulse back in
+  pinMode(11, INPUT);
+  int duration = pulseIn(11, HIGH);  // Reads echo pulse in from SRF05 in micro seconds
+  int sonardist = duration/58;      // Dividing this by 58 gives us a distance in cm
+  //if(sonardist > 255)
+  //{
+  //  sonardist = 255;
+  //}
+  
+  return sonardist;
+  
+
+}

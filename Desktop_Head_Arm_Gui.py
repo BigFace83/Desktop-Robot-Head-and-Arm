@@ -1,11 +1,16 @@
 from Tkinter import *
 from tkFileDialog import *
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+from matplotlib.figure import Figure
 from PIL import Image
 from PIL import ImageTk
 import Desktop_Head_Arm_Serial
 import Desktop_Head_Arm_OpenCV
 import math
 import time
+import Desktop_Head_Arm_Model
 
 
 ########################################################################################
@@ -35,9 +40,7 @@ class Application(Frame):
         self.createWidgets()
 
 
-
-
-        self.UpdateHandSwitch()
+        self.UpdateSonar()
         self.Updateservopositions()
         self.FaceDetected = False
         self.EyeStatus = 0
@@ -65,12 +68,12 @@ class Application(Frame):
 
 
 
+        # Vision Frame contents
+        self.CamImage = Canvas(VisionFrame, width=320, height=240,bg = "black")
+        self.CamImage.grid(row = 0, column = 0, columnspan = 4, pady = 5)
 
-        self.CamImage = Canvas(VisionFrame, width=480, height=360,bg = "black")
-        self.CamImage.grid(row = 0, column = 0, columnspan = 4)
-
-        self.CamImage2 = Canvas(VisionFrame, width=480, height=360,bg = "black")
-        self.CamImage2.grid(row = 1, column = 0, columnspan = 4)
+        self.CamImage2 = Canvas(VisionFrame, width=320, height=240,bg = "black")
+        self.CamImage2.grid(row = 1, column = 0, columnspan = 4, pady = 5)
 
         self.Capturebutton = Button(VisionFrame, text="Capture", bg="royal blue", activebackground = "royal blue", highlightthickness = 0, command = self.CaptureImage)
         self.Capturebutton.grid(row = 2, column = 0)
@@ -91,25 +94,28 @@ class Application(Frame):
 
 
 
-
+        # Manual Frame contents
         self.commandEntry= Entry(ManualFrame)
         self.commandEntry.grid(row = 2, column = 0, columnspan = 3)
         self.commandEntry.bind('<Return>', self.sendCommand)
 
         self.send = Button(ManualFrame, text="Send", bg="royal blue", activebackground = "royal blue", highlightthickness = 0)
         self.send.bind('<Button-1>', self.sendCommand)
-        self.send.grid(row = 2, column = 4)
+        self.send.grid(row = 2, column = 4, pady = 10)
 
         self.livedatastatus = IntVar()
         self.LiveDataCheck = Checkbutton(ManualFrame, text="Live Data", bg="royal blue", activebackground = "royal blue", highlightthickness = 0, variable=self.livedatastatus,command=self.LiveData)
         self.LiveDataCheck.grid(row = 3, column = 0, columnspan = 2)
 
-        self.HSCanvas = Canvas(ManualFrame, bg="royal blue",  highlightthickness = 0, width=100, height=100)
-        self.HSCanvas.grid(row = 4, column = 0, columnspan = 3)
-        self.HSCanvas.create_oval(10, 10, 90, 90, width=2, fill='green')
+        self.SonarCanvas = Canvas(ManualFrame, bg="black",  highlightthickness = 0, width=200, height=50)
+        self.SonarCanvas.grid(row = 4, column = 0, columnspan = 3)
+
+        self.SonarEntry= Entry(ManualFrame, bg="royal blue", highlightthickness = 0, width = 4)
+        self.SonarEntry.grid(row = 4, column = 4)
+
 
         self.Homebutton = Button(ManualFrame, text="Home", bg="royal blue", activebackground = "royal blue", highlightthickness = 0, command = self.Home)
-        self.Homebutton.grid(row = 3, column = 4)
+        self.Homebutton.grid(row = 3, column = 4, pady = 10)
 
 
 
@@ -143,21 +149,27 @@ class Application(Frame):
         self.YawEntry.grid(row = 1, column = 2)
 
         ###################################################################
-        # Sliders for Head controls                   
+        # Sliders for Arm controls                   
         ###################################################################
 
-        self.RotateSlider = Scale(ManualFrame, from_=-90, to=90, bg="royal blue", activebackground = "royal blue", highlightthickness = 0, orient= VERTICAL)
+        self.RotateSlider = Scale(ManualFrame, from_=-60, to=60, bg="royal blue", activebackground = "royal blue", highlightthickness = 0, orient= VERTICAL)
         self.RotateSlider.grid(row = 0, column = 3)
         self.RotateSlider.bind('<ButtonRelease-1>', self.sendArmSliders)
 
-        self.LowerSlider = Scale(ManualFrame, from_=0, to=90, bg="royal blue", activebackground = "royal blue", highlightthickness = 0, orient= VERTICAL)
+        self.LowerSlider = Scale(ManualFrame, from_=0, to=120, bg="royal blue", activebackground = "royal blue", highlightthickness = 0, orient= VERTICAL)
+        self.LowerSlider.set(120)
         self.LowerSlider.grid(row = 0, column = 4)
         self.LowerSlider.bind('<ButtonRelease-1>', self.sendArmSliders)
 
-        self.ElbowSlider = Scale(ManualFrame, from_=-70, to=120, bg="royal blue", activebackground = "royal blue", highlightthickness = 0, orient= VERTICAL)
-        self.ElbowSlider.set(-70)
+        self.ElbowSlider = Scale(ManualFrame, from_=-140, to=20, bg="royal blue", activebackground = "royal blue", highlightthickness = 0, orient= VERTICAL)
+        self.ElbowSlider.set(-140)
         self.ElbowSlider.grid(row = 0, column = 5)
         self.ElbowSlider.bind('<ButtonRelease-1>', self.sendArmSliders)
+
+        self.GripperSlider = Scale(ManualFrame, from_=-90, to=90, bg="royal blue", activebackground = "royal blue", highlightthickness = 0, orient= VERTICAL)
+        self.GripperSlider.set(30)
+        self.GripperSlider.grid(row = 0, column = 6)
+        self.GripperSlider.bind('<ButtonRelease-1>', self.sendArmSliders)
 
         ###################################################################
         # Entry boxes for Arm servo positions                  
@@ -171,6 +183,9 @@ class Application(Frame):
 
         self.ElbowEntry= Entry(ManualFrame, bg="royal blue", highlightthickness = 0, width = 4)
         self.ElbowEntry.grid(row = 1, column = 5)
+
+        self.GripperEntry= Entry(ManualFrame, bg="royal blue", highlightthickness = 0, width = 4)
+        self.GripperEntry.grid(row = 1, column = 6)
 
 
 
@@ -192,24 +207,55 @@ class Application(Frame):
 
         self.SeqVar = StringVar()
         self.SeqVar.set("None") # initial value
-        self.SeqOption = OptionMenu(SequenceFrame, self.SeqVar, "None", "Shake Head", "Nod Head")
+        self.SeqOption = OptionMenu(SequenceFrame, self.SeqVar, "None", "Shake Head", "Nod Head", "Arm Test")
         self.SeqOption.grid(row = 0, column = 0)
 
         self.RunSeq = Button(SequenceFrame, bg="royal blue", activebackground = "royal blue", highlightthickness = 0, text="Run Sequence")
         self.RunSeq.bind('<Button-1>', self.RunSequence)
         self.RunSeq.grid(row = 0, column = 1)
 
+
+        # Visualisation Frame contents
+
+        self.ArmModelFig = Figure(figsize=(5,5), dpi=100)
+
+        self.ArmModelCanvas = FigureCanvasTkAgg(self.ArmModelFig, VisualisationFrame)
+        self.ArmModelCanvas.show()
+        self.ArmModelCanvas.get_tk_widget().grid(row = 0, column = 0, pady = 5)
+
+        self.a = self.ArmModelFig.add_subplot(111, projection='3d')
+        self.PlotRobotArm([20,10,50,-20])
+
+
+
+
+
+        self.NNCanvas = Canvas(VisualisationFrame, bg="black",  highlightthickness = 0, width=300, height=200)
+        self.NNCanvas.grid(row = 1, column = 0, pady = 5)
+
+        self.NNCanvas2 = Canvas(VisualisationFrame, bg="black",  highlightthickness = 0, width=300, height=200)
+        self.NNCanvas2.grid(row = 2, column = 0, pady = 5)
+
+
+    def PlotRobotArm(self,JointAngles):
+
+        ReturnArray = Desktop_Head_Arm_Model.DHGetJointPositions(JointAngles[0], JointAngles[1], JointAngles[2], JointAngles[3])
+
+        X =  ReturnArray[:,0]
+        Y = ReturnArray[:,1]
+        Z = ReturnArray[:,2]
+
+        self.a.clear()
+
+        self.a.set_xlim3d(-50, 300)
+        self.a.set_ylim3d(-200,200)
+        self.a.set_zlim3d(0,300)
+        self.a.set_autoscale_on(False)
+        self.ArmModelFig.tight_layout()
+
+        self.a.plot(X,Y,Z, color="black", linewidth=5)
+        self.ArmModelCanvas.draw()
         
-
-
-        self.NNCanvas1 = Canvas(VisualisationFrame, bg="black",  highlightthickness = 0, width=300, height=300)
-        self.NNCanvas1.grid(row = 0, column = 0)
-
-        self.NNCanvas2 = Canvas(VisualisationFrame, bg="black",  highlightthickness = 0, width=300, height=300)
-        self.NNCanvas2.grid(row = 1, column = 0)
-
-
-  
 
  
     def LiveData(self):
@@ -247,8 +293,9 @@ class Application(Frame):
         self.YawSlider.set(0)
 
         self.RotateSlider.set(0)
-        self.LowerSlider.set(0)
-        self.ElbowSlider.set(-70)
+        self.LowerSlider.set(120)
+        self.ElbowSlider.set(-135)
+        self.GripperSlider.set(30)
 
         self.sendHeadSliders(self)
         self.sendArmSliders(self)
@@ -260,35 +307,29 @@ class Application(Frame):
         
     def sendArmSliders(self,event):
         print "Sending Command", 'A0B'+str(self.RotateSlider.get())+'L'+str(self.LowerSlider.get())+'U'+str(self.ElbowSlider.get())
-        Desktop_Head_Arm_Serial.sendcommand('A0B'+str(self.RotateSlider.get())+'L'+str(self.LowerSlider.get())+'U'+str(self.ElbowSlider.get()))       
+        Desktop_Head_Arm_Serial.sendcommand('A0B'+str(self.RotateSlider.get())+'L'+str(self.LowerSlider.get())+'U'+str(self.ElbowSlider.get())+'G'+str(self.GripperSlider.get()))       
 
+        self.PlotRobotArm([self.RotateSlider.get(),self.LowerSlider.get(),self.ElbowSlider.get(),self.GripperSlider.get()])
+        
    
     def CaptureImage(self):
         #self.OpenCVImage = Desktop_Head_Arm_OpenCV.ReturnFrameRGB()
         balldata, self.OpenCVImage, imgthreshed = Desktop_Head_Arm_OpenCV.FindBall(YELLOWOBJECTS)
-        print balldata
-        self.OpenCVImage = Image.fromarray(self.OpenCVImage)
-        self.OpenCVImage = self.OpenCVImage.resize((480, 360), Image.ANTIALIAS)
-	self.OpenCVImage = ImageTk.PhotoImage(self.OpenCVImage)
-        self.CamImage.create_image(0,0, anchor=NW, image=self.OpenCVImage)
-
-        imgthreshed = Image.fromarray(imgthreshed)
-        imgthreshed = imgthreshed.resize((480, 360), Image.ANTIALIAS)
-	imgthreshed = ImageTk.PhotoImage(imgthreshed)
-        self.CamImage2.create_image(0,0, anchor=NW, image=imgthreshed)
+        self.ImagetoGUI1(self.OpenCVImage)
 
 
-    def UpdateHandSwitch(self):
+
+    def UpdateSonar(self):
         Desktop_Head_Arm_Serial.sendcommand('A4')
-        Handswitchstatus = int(Desktop_Head_Arm_Serial.readserial())
+        SonarDistance = int(Desktop_Head_Arm_Serial.readserial())
         
-        if Handswitchstatus == 0:
-            print 'Hand triggered'
-            self.HSCanvas.create_oval(10, 10, 90, 90, width=2, fill='red')
-        else:
-            self.HSCanvas.create_oval(10, 10, 90, 90, width=2, fill='green')
-        root.update_idletasks()
-        self.after(100, self.UpdateHandSwitch)
+        self.SonarCanvas.create_rectangle(0, 0, 200, 50, fill="black")
+        self.SonarCanvas.create_line(0, 25, SonarDistance/2, 25, fill="green", width=20)
+
+        self.SonarEntry.delete(0, END)
+        self.SonarEntry.insert(0, SonarDistance)
+
+        self.after(100, self.UpdateSonar)
 
 
         
@@ -337,6 +378,9 @@ class Application(Frame):
         elif self.SeqVar.get() == 'Nod Head':
             print 'Nod Head'
             self.HeadNod()
+        elif self.SeqVar.get() == 'Arm Test':
+            print 'Arm Test'
+            self.ArmTest()
         
     def HeadShake(self):
         #Head shake
@@ -371,7 +415,16 @@ class Application(Frame):
         Desktop_Head_Arm_Serial.sendcommand('H0R0P-20')
         time.sleep(0.5)
         Desktop_Head_Arm_Serial.sendcommand('H0R0P20')
-       
+
+    def ArmTest(self):
+        Desktop_Head_Arm_Serial.sendcommand('A0 B0L0U-70G0')
+        time.sleep(1)
+        Desktop_Head_Arm_Serial.sendcommand('A0 B-36L89U-43G0')
+        time.sleep(1)
+        Desktop_Head_Arm_Serial.sendcommand('A0 B-36L99U-35G10')
+        time.sleep(1)
+        Desktop_Head_Arm_Serial.sendcommand('A0 B6L10U46G-45')
+        time.sleep(1)
 
 
     def FaceDetection(self):
@@ -464,13 +517,13 @@ class Application(Frame):
 
     def ImagetoGUI1(self,OpenCVImage):
             self.OpenCVGUIImage = Image.fromarray(OpenCVImage)
-            self.OpenCVGUIImage = self.OpenCVGUIImage.resize((480, 360), Image.ANTIALIAS)
+            self.OpenCVGUIImage = self.OpenCVGUIImage.resize((320, 240), Image.ANTIALIAS)
 	    self.OpenCVGUIImage = ImageTk.PhotoImage(self.OpenCVGUIImage)
             self.CamImage.create_image(0,0, anchor=NW, image=self.OpenCVGUIImage)
 
     def ImagetoGUI2(self,OpenCVImage):
             self.OpenCVGUI2Image = Image.fromarray(OpenCVImage)
-            self.OpenCVGUI2Image = self.OpenCVGUI2Image.resize((480, 360), Image.ANTIALIAS)
+            self.OpenCVGUI2Image = self.OpenCVGUI2Image.resize((320, 240), Image.ANTIALIAS)
 	    self.OpenCVGUI2Image = ImageTk.PhotoImage(self.OpenCVGUI2Image)
             self.CamImage2.create_image(0,0, anchor=NW, image=self.OpenCVGUI2Image)
 
