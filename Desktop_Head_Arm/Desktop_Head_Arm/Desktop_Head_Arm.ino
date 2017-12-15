@@ -47,6 +47,7 @@ const int YawInPin = A7;  // Analog input pin that the potentiometer is attached
 const int ArmRotateInPin = A0;
 const int ArmLowerInPin = A1;
 const int ArmElbowInPin = A2;
+const int ArmSonarInPin = A3;
 
 const int HandSwitchPin = 30;     //Hand switch input pin
 
@@ -61,7 +62,7 @@ int RawYawValue = 0;        // value read from the pot
 int RawArmRotateValue = 0;
 int RawArmLowervalue = 0;
 int RawArmElbowValue = 0;
-
+int RawArmSonarValue = 0;
 
 
 /****************************************************************************
@@ -199,6 +200,7 @@ void loop() {
         RawArmRotateValue = analogRead(ArmRotateInPin);
         RawArmLowervalue = analogRead(ArmLowerInPin);
         RawArmElbowValue = analogRead(ArmElbowInPin);
+        RawArmSonarValue = analogRead(ArmSonarInPin);
   
         // map it to the calibrated range for angles:
         int ScaledRollValue = map(RawRollValue, 515, 120, -90, 90);
@@ -208,8 +210,7 @@ void loop() {
         int ScaledArmRotateValue = map(RawArmRotateValue, 470, 160, -45, 45);
         int ScaledArmLowervalue = map(RawArmLowervalue, 524, 85, 120, 0);
         int ScaledArmElbowValue = map(RawArmElbowValue, 505, 109, -150, 20);
-
-        int ScaledSonarValue = map(ArmSonarSetpoint, 90, -85, 500, 2500);
+        int ScaledSonarValue = map(RawArmSonarValue, 498, 102, -90, 90);
 
         
         /*
@@ -218,8 +219,9 @@ void loop() {
         Serial.print(RawArmRotateValue);
         Serial.print(", Lower val = ");
         Serial.println(RawArmLowervalue);
-        Serial.print(", Elbow val = ");
-        Serial.println(RawArmElbowValue);
+        
+        Serial.print(", Sonar Servo val = ");
+        Serial.println(RawArmSonarValue);
         */
 
         SonarReading = readsonar();
@@ -280,6 +282,7 @@ void ArmPID(float Rotate,float Lower, float Elbow, int Sonar){
     static float RotateprevError;
     static float LowerprevError;
     static float ElbowprevError;
+    static float SonarprevError;
 
     
     float RotateError = Rotate - ArmRotateSetpoint;
@@ -298,7 +301,10 @@ void ArmPID(float Rotate,float Lower, float Elbow, int Sonar){
     ElbowprevError = ElbowError;
 
 
-     ArmSonar.writeMicroseconds(Sonar); 
+    float SonarError = Sonar - ArmSonarSetpoint;
+    ArmSonarms = int(ArmSonarms + (SonarError*(ArmPGain/2)) + ((SonarError-SonarprevError)*(ArmDGain/2)));
+    ArmSonar.writeMicroseconds(ArmSonarms);    
+    SonarprevError = SonarError;
    
 }
 
@@ -475,6 +481,10 @@ void interpretcommand()
         break;
     }        
    case(4):{
+        Serial.println(map(RawArmSonarValue, 498, 102, -90, 90));
+        break;
+    }
+   case(5):{
         Serial.println(SonarReading);
         break;
     }

@@ -8,9 +8,11 @@ from PIL import Image
 from PIL import ImageTk
 import Desktop_Head_Arm_Serial
 import Desktop_Head_Arm_OpenCV
+import Desktop_Head_Arm_Model
+import numpy as np
 import math
 import time
-import Desktop_Head_Arm_Model
+
 
 
 ########################################################################################
@@ -28,6 +30,9 @@ GREENOBJECTS = [55,70,80,90,150,255]
 CamCentreX = 320
 CamCentreY = 240
 
+Camimagewidth = 480
+Camimageheight = 320
+
 
 
 
@@ -44,6 +49,8 @@ class Application(Frame):
         self.Updateservopositions()
         self.FaceDetected = False
         self.EyeStatus = 0
+
+        self.WorldArray = []
 
       
 
@@ -69,10 +76,10 @@ class Application(Frame):
 
 
         # Vision Frame contents
-        self.CamImage = Canvas(VisionFrame, width=320, height=240,bg = "black")
+        self.CamImage = Canvas(VisionFrame, width=Camimagewidth, height=Camimageheight, bg = "black")
         self.CamImage.grid(row = 0, column = 0, columnspan = 4, pady = 5)
 
-        self.CamImage2 = Canvas(VisionFrame, width=320, height=240,bg = "black")
+        self.CamImage2 = Canvas(VisionFrame, width=Camimagewidth, height=Camimageheight, bg = "black")
         self.CamImage2.grid(row = 1, column = 0, columnspan = 4, pady = 5)
 
         self.Capturebutton = Button(VisionFrame, text="Capture", bg="royal blue", activebackground = "royal blue", highlightthickness = 0, command = self.CaptureImage)
@@ -112,6 +119,7 @@ class Application(Frame):
 
         self.SonarEntry= Entry(ManualFrame, bg="royal blue", highlightthickness = 0, width = 4)
         self.SonarEntry.grid(row = 4, column = 4)
+        self.SonarEntry.insert(0, 0)
 
 
         self.Homebutton = Button(ManualFrame, text="Home", bg="royal blue", activebackground = "royal blue", highlightthickness = 0, command = self.Home)
@@ -217,35 +225,76 @@ class Application(Frame):
 
         # Visualisation Frame contents
 
-        self.ArmModelFig = Figure(figsize=(5,5), dpi=100)
+        ###################################################################
+        # Robot Arm Model Window - MatPlotLib chart                
+        ###################################################################
+
+        self.ArmModelFig = Figure(figsize=(3,3), dpi=100)
 
         self.ArmModelCanvas = FigureCanvasTkAgg(self.ArmModelFig, VisualisationFrame)
         self.ArmModelCanvas.show()
-        self.ArmModelCanvas.get_tk_widget().grid(row = 0, column = 0, pady = 5)
+        self.ArmModelCanvas.get_tk_widget().grid(row = 0, column = 0, pady = 5, columnspan = 2)
+
+
+        self.showsonarstatus = IntVar()
+        self.ShowSonarCheck = Checkbutton(VisualisationFrame, text="Show Sonar", bg="royal blue", activebackground = "royal blue", highlightthickness = 0, variable=self.showsonarstatus)
+        self.ShowSonarCheck.grid(row = 1, column = 0)
 
         self.a = self.ArmModelFig.add_subplot(111, projection='3d')
-        self.PlotRobotArm([20,10,50,-20])
+        self.PlotRobotArm([self.RotateSlider.get(),self.LowerSlider.get(),self.ElbowSlider.get(),self.GripperSlider.get()])
+
+
+        ###################################################################
+        # Environment Model Window - MatPlotLib chart                
+        ###################################################################
+
+        self.WorldModelFig = Figure(figsize=(6,6), dpi=100)
+        self.WorldModelCanvas = FigureCanvasTkAgg(self.WorldModelFig, VisualisationFrame)
+        self.WorldModelCanvas.show()
+        self.WorldModelCanvas.get_tk_widget().grid(row = 2, column = 0, pady = 5, columnspan = 4)
+
+        self.Plotworldstatus = IntVar()
+        self.PlotworldCheck = Checkbutton(VisualisationFrame, text="Start World Plot", bg="royal blue", activebackground = "royal blue", highlightthickness = 0, variable=self.Plotworldstatus)
+        self.PlotworldCheck.grid(row = 3, column = 0)
+
+        self.DatapointEntry= Entry(VisualisationFrame, bg="royal blue", highlightthickness = 0, width = 5)
+        self.DatapointEntry.grid(row = 3, column = 1)
+
+        self.Clearworld = Button(VisualisationFrame, text="Clear Plot", bg="royal blue", activebackground = "royal blue", highlightthickness = 0)
+        self.Clearworld.bind('<Button-1>', self.ClearWorldPlot)
+        self.Clearworld.grid(row = 3, column = 2)
+
+        self.PlotworldButton = Button(VisualisationFrame, text="Plot", bg="royal blue", activebackground = "royal blue", highlightthickness = 0)
+        self.PlotworldButton.bind('<Button-1>', self.PlotWorld)
+        self.PlotworldButton.grid(row = 3, column = 3)
 
 
 
+        self.b = self.WorldModelFig.add_subplot(111, projection='3d')
+        self.WorldModelFig.tight_layout()
+        self.b.set_facecolor('black') #Set background and all gridlines to black
+        self.b.w_xaxis.set_pane_color((0, 0, 0, 1.0))
+        self.b.w_yaxis.set_pane_color((0, 0, 0, 1.0))
+        self.b.w_zaxis.set_pane_color((0, 0, 0, 1.0))
+        self.b.xaxis._axinfo["grid"]['color'] = "black"
+        self.b.yaxis._axinfo["grid"]['color'] = "black"
+        self.b.zaxis._axinfo["grid"]['color'] = "black"
+        self.b.set_xlim3d(-50, 2000) #Set plot limits
+        self.b.set_ylim3d(-2000,2000)
+        self.b.set_zlim3d(-2000,2000)
 
-
-        self.NNCanvas = Canvas(VisualisationFrame, bg="black",  highlightthickness = 0, width=300, height=200)
-        self.NNCanvas.grid(row = 1, column = 0, pady = 5)
-
-        self.NNCanvas2 = Canvas(VisualisationFrame, bg="black",  highlightthickness = 0, width=300, height=200)
-        self.NNCanvas2.grid(row = 2, column = 0, pady = 5)
-
+        self.b.plot([0,0],[0,0],[0,20], color="blue", linewidth=10)
 
     def PlotRobotArm(self,JointAngles):
 
-        ReturnArray = Desktop_Head_Arm_Model.DHGetJointPositions(JointAngles[0], JointAngles[1], JointAngles[2], JointAngles[3])
+        ReturnArray, XYZSonar = Desktop_Head_Arm_Model.DHGetJointPositions(JointAngles[0], JointAngles[1], JointAngles[2], JointAngles[3], int(self.SonarEntry.get())*10)
 
         X =  ReturnArray[:,0]
         Y = ReturnArray[:,1]
         Z = ReturnArray[:,2]
 
         self.a.clear()
+ 
 
         self.a.set_xlim3d(-50, 300)
         self.a.set_ylim3d(-200,200)
@@ -253,9 +302,34 @@ class Application(Frame):
         self.a.set_autoscale_on(False)
         self.ArmModelFig.tight_layout()
 
-        self.a.plot(X,Y,Z, color="black", linewidth=5)
+        self.a.plot(X,Y,Z, color="blue", linewidth=8)
+
+        if self.showsonarstatus.get() == 1:
+            self.a.plot((ReturnArray.item(4,0), XYZSonar.item(0)),(ReturnArray.item(4,1), XYZSonar.item(1)),(ReturnArray.item(4,2), XYZSonar.item(2)), color="red", linewidth=1)
+
         self.ArmModelCanvas.draw()
+
+        return XYZSonar
         
+    def PlotWorld(self, event):
+
+        worldnparray = np.asarray(self.WorldArray)
+        X =  worldnparray[:,0]
+        Y = worldnparray[:,1]
+        Z = worldnparray[:,2]
+        self.b.scatter(X,Y,Z, s = 20,  depthshade = True)
+        self.WorldModelCanvas.draw()
+
+    def ClearWorldPlot(self,event):
+        self.b.clear()
+        self.b.set_xlim3d(-50, 2000)
+        self.b.set_ylim3d(-2000,2000)
+        self.b.set_zlim3d(-2000,2000)
+
+        self.b.plot([0,0],[0,0],[0,20], color="blue", linewidth=10)
+        self.WorldModelCanvas.draw()
+
+        self.WorldArray = []
 
  
     def LiveData(self):
@@ -286,8 +360,7 @@ class Application(Frame):
         Desktop_Head_Arm_Serial.sendcommand(self.commandEntry.get())
 
     def Home(self):
-        #print "Sending Command", 'H0X0Y0Z0 A0R0L0E0'
-        #Desktop_Head_Arm_Serial.sendcommand('H0X0Y0Z0 A0R0L0E0')
+ 
         self.RollSlider.set(0)
         self.PitchSlider.set(0)
         self.YawSlider.set(0)
@@ -309,7 +382,8 @@ class Application(Frame):
         print "Sending Command", 'A0B'+str(self.RotateSlider.get())+'L'+str(self.LowerSlider.get())+'U'+str(self.ElbowSlider.get())
         Desktop_Head_Arm_Serial.sendcommand('A0B'+str(self.RotateSlider.get())+'L'+str(self.LowerSlider.get())+'U'+str(self.ElbowSlider.get())+'G'+str(self.GripperSlider.get()))       
 
-        self.PlotRobotArm([self.RotateSlider.get(),self.LowerSlider.get(),self.ElbowSlider.get(),self.GripperSlider.get()])
+        if self.livedatastatus.get() == 0:
+            self.PlotRobotArm([self.RotateSlider.get(),self.LowerSlider.get(),self.ElbowSlider.get(),self.GripperSlider.get()])
         
    
     def CaptureImage(self):
@@ -320,7 +394,7 @@ class Application(Frame):
 
 
     def UpdateSonar(self):
-        Desktop_Head_Arm_Serial.sendcommand('A4')
+        Desktop_Head_Arm_Serial.sendcommand('A5')
         SonarDistance = int(Desktop_Head_Arm_Serial.readserial())
         
         self.SonarCanvas.create_rectangle(0, 0, 200, 50, fill="black")
@@ -366,8 +440,19 @@ class Application(Frame):
         self.ElbowEntry.delete(0, END)
         self.ElbowEntry.insert(0, Elbowservopos)
 
+        Desktop_Head_Arm_Serial.sendcommand('A4')
+        Gripperservopos = int(Desktop_Head_Arm_Serial.readserial())
+        self.GripperEntry.delete(0, END)
+        self.GripperEntry.insert(0, Gripperservopos)
+
 
         if self.livedatastatus.get() == 1:
+            XYZSonar = self.PlotRobotArm([Rotateservopos,Lowerservopos,Elbowservopos,Gripperservopos])
+            if self.Plotworldstatus.get() == 1: #if we want to log sonar end positions
+                    self.WorldArray.append([XYZSonar.item(0),XYZSonar.item(1),XYZSonar.item(2)])
+                    self.DatapointEntry.delete(0, END)
+                    self.DatapointEntry.insert(0, len(self.WorldArray))
+
             self.after(100, self.Updateservopositions)  
 
 
@@ -517,13 +602,13 @@ class Application(Frame):
 
     def ImagetoGUI1(self,OpenCVImage):
             self.OpenCVGUIImage = Image.fromarray(OpenCVImage)
-            self.OpenCVGUIImage = self.OpenCVGUIImage.resize((320, 240), Image.ANTIALIAS)
+            self.OpenCVGUIImage = self.OpenCVGUIImage.resize((Camimagewidth, Camimageheight), Image.ANTIALIAS)
 	    self.OpenCVGUIImage = ImageTk.PhotoImage(self.OpenCVGUIImage)
             self.CamImage.create_image(0,0, anchor=NW, image=self.OpenCVGUIImage)
 
     def ImagetoGUI2(self,OpenCVImage):
             self.OpenCVGUI2Image = Image.fromarray(OpenCVImage)
-            self.OpenCVGUI2Image = self.OpenCVGUI2Image.resize((320, 240), Image.ANTIALIAS)
+            self.OpenCVGUI2Image = self.OpenCVGUI2Image.resize((Camimagewidth, Camimageheight), Image.ANTIALIAS)
 	    self.OpenCVGUI2Image = ImageTk.PhotoImage(self.OpenCVGUI2Image)
             self.CamImage2.create_image(0,0, anchor=NW, image=self.OpenCVGUI2Image)
 

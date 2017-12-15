@@ -16,19 +16,21 @@ def DHMatrix(a, alpha, d, theta):
         [0, 0, 0, 1],
     ])
 
-def DHGetJointPositions(thetaBase, thetaLower, thetaElbow, thetaGripper):
+def DHGetJointPositions(thetaBase, thetaLower, thetaElbow, thetaGripper, Sonar):
 
     XYZ0 = np.array([0,0,0,1])
     T1 = DHMatrix(15, 90, 102, thetaBase) #XYZ coordinates of lower joint
     T2 = DHMatrix(150, 0, 0, thetaLower) #XYZ coordinates of Elbow joint
     T3 = DHMatrix(161, 0, 0, thetaElbow) #XYZ coordinates of Gripper/Wrist joint
     T4 = DHMatrix(38, 0, 0, thetaGripper) #XYZ coordinates of End effector/centre of sonar sensor
-
+    TS = DHMatrix(Sonar, 0, 0, 0) #XYZ of sonar end point
 
     XYZ1 = np.dot(T1,XYZ0)
     XYZ2 = np.dot(T1,np.dot(T2,XYZ0))
     XYZ3 = np.dot(T1,np.dot(T2,np.dot(T3,XYZ0)))
     XYZ4 = np.dot(T1,np.dot(T2,np.dot(T3,np.dot(T4,XYZ0))))
+    XYZSonar = np.dot(T1,np.dot(T2,np.dot(T3,np.dot(T4,np.dot(TS,XYZ0)))))
+
 
     #Form return array
 
@@ -38,9 +40,10 @@ def DHGetJointPositions(thetaBase, thetaLower, thetaElbow, thetaGripper):
                             XYZ3,
                             XYZ4])
 
-    return ReturnArray
+    return ReturnArray, XYZSonar
 
 
+    
 
 
 
